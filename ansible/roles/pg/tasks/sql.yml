@@ -1,0 +1,47 @@
+---
+# The SQL files in db/ are copied to the VM and applied in the order given by
+# pg_sql_files. There is no ledger table and no bookkeeping: the checksum
+# Ansible already computes for the copy is the guard. A file that did not
+# change is not copied, and what is not copied is not applied.
+#
+# psql connects as {{ pg_user }} over loopback, so every table the files create
+# belongs to the application role and needs no grant afterwards.
+
+- name: Create the SQL directory in the VM
+  ansible.builtin.file:
+    path: "{{ pg_sql_dir }}"
+    state: directory
+    mode: "0755"
+
+# Unchanged files are reported as ok, not changed -- that is what the next task
+# reads to decide whether there is anything to do.
+- name: Copy the SQL files into the VM
+  ansible.builtin.copy:
+    src: "{{ pg_sql_src }}/{{ item }}"
+    dest: "{{ pg_sql_dir }}/{{ item }}"
+    mode: "0644"
+  loop: "{{ pg_sql_files }}"
+  register: pg_sql_copied
+
+# --single-transaction wraps the whole file, so it is either applied completely
+# or not at all and a failed run leaves nothing half-seeded behind.
+# The noqa below silences a lint rule that wants a handler here: the condition
+# is per file, and a handler cannot be told which file to run for.
+- name: Apply the SQL files that arrived or changed # noqa: no-handler
+  ansible.builtin.command:
+    argv:
+      - psql
+      - --set=ON_ERROR_STOP=1
+      - --single-transaction
+      - --quiet
+      - --host=127.0.0.1
+      - --username={{ pg_user }}
+      - --dbname={{ pg_database }}
+      - --file={{ item.dest }}
+  environment:
+    PGPASSWORD: "{{ pg_password }}"
+  loop: "{{ pg_sql_copied.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item is changed
+  changed_when: true

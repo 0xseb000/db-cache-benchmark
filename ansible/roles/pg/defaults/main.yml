@@ -1,0 +1,9 @@
+---
+# Debian 12 ships PostgreSQL 15 and the Vagrantfile pins the box, so the major
+# version is a constant here instead of something detected at run time.
+pg_major: 15
+pg_conf_dir: "/etc/postgresql/{{ pg_major }}/main"
+
+# Where the SQL files live on the host, and where they are copied to in the VM.
+pg_sql_src: "{{ playbook_dir }}/../db"
+pg_sql_dir: /opt/db-sql

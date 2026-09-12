@@ -1,0 +1,21 @@
+---
+# Fixed addresses of the three VMs on the host-only network. They must match
+# the addresses in the Vagrantfile.
+pg_host: 192.168.56.10
+redis_host: 192.168.56.11
+web_host: 192.168.56.12
+
+pg_database: hostingdb
+pg_user: app
+
+# Lab credentials in plain text on purpose: the VMs are reachable only from the
+# host-only network. Anything reachable from a real network needs Ansible Vault.
+pg_password: app_pw
+
+# The SQL files in db/, applied to PostgreSQL in this order whenever they change.
+pg_sql_files:
+  - schema.sql
+  - seed.sql
+
+# How long a cached report stays valid.
+cache_ttl_seconds: 300

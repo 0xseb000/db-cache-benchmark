@@ -1,0 +1,59 @@
+---
+- name: Install PostgreSQL
+  ansible.builtin.apt:
+    name:
+      - postgresql
+      # Required by the community.postgresql modules used below.
+      - python3-psycopg2
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+# The web VM reaches this one over the lab network, so the server has to listen
+# there and pg_hba.conf has to let that address in. Without both, the app only
+# ever gets 'connection refused'.
+- name: Listen on loopback and on the lab network
+  ansible.builtin.lineinfile:
+    path: "{{ pg_conf_dir }}/postgresql.conf"
+    regexp: '^#?\s*listen_addresses\s*='
+    line: "listen_addresses = 'localhost,{{ pg_host }}'"
+  notify: Restart PostgreSQL
+
+- name: Configure client authentication
+  ansible.builtin.template:
+    src: pg_hba.conf.j2
+    dest: "{{ pg_conf_dir }}/pg_hba.conf"
+    owner: postgres
+    group: postgres
+    mode: "0640"
+  notify: Restart PostgreSQL
+
+- name: Start and enable PostgreSQL
+  ansible.builtin.service:
+    name: postgresql
+    state: started
+    enabled: true
+
+- name: Create the application role
+  community.postgresql.postgresql_user:
+    name: "{{ pg_user }}"
+    password: "{{ pg_password }}"
+  become: true
+  become_user: postgres
+  no_log: true
+
+# The application role owns the database, so it creates the tables in db/ itself
+# and owns those too. That is what saves this role every single GRANT.
+- name: Create the database
+  community.postgresql.postgresql_db:
+    name: "{{ pg_database }}"
+    owner: "{{ pg_user }}"
+  become: true
+  become_user: postgres
+
+# The SQL below connects over TCP, which needs the pg_hba.conf written above.
+- name: Apply pending configuration changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Apply the SQL files from db/
+  ansible.builtin.import_tasks: sql.yml
