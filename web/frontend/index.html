@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hostingdb — Datenbank-Browser</title>
+</head>
+<body>
+<div id="app"></div>
+<!-- The whole page is src/index.vue; this file only mounts it. -->
+<script type="module">
+  import { createApp } from 'vue';
+  import App from './src/index.vue';
+
+  createApp(App).mount('#app');
+</script>
+</body>
+</html>
