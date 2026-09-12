@@ -1,0 +1,18 @@
+---
+- name: PostgreSQL
+  hosts: pg
+  become: true
+  roles:
+    - pg
+
+- name: Redis
+  hosts: redis
+  become: true
+  roles:
+    - redis
+
+- name: Web application
+  hosts: web
+  become: true
+  roles:
+    - web
