@@ -1,0 +1,9 @@
+---
+web_dir: /opt/web
+web_port: 8000
+
+# Sources on the host. Everything is built in the VM, so the host needs no
+# Node.js -- only these files are copied over.
+web_src: "{{ playbook_dir }}/../web"
+web_frontend_src: "{{ playbook_dir }}/../web/frontend"
+web_query_src: "{{ playbook_dir }}/../db/query.sql"

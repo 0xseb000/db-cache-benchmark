@@ -1,0 +1,24 @@
+---
+# Handlers run in the order they are defined here, not in the order they were
+# notified. That is why the install stands above the build that needs it.
+
+- name: Install the frontend dependencies
+  ansible.builtin.command:
+    cmd: npm ci --no-audit --no-fund
+    chdir: "{{ web_dir }}/frontend"
+  changed_when: true
+
+# Built straight into the directory Flask serves. The bundles carry a content
+# hash in their name, so --emptyOutDir is what keeps the ones from earlier builds
+# from piling up next to the current one.
+- name: Build the frontend
+  ansible.builtin.command:
+    cmd: npm run build -- --outDir {{ web_dir }}/static --emptyOutDir
+    chdir: "{{ web_dir }}/frontend"
+  changed_when: true
+
+- name: Restart the web application
+  ansible.builtin.systemd_service:
+    name: web
+    state: restarted
+    daemon_reload: true

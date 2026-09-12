@@ -1,0 +1,115 @@
+---
+- name: Install Python and Node.js
+  ansible.builtin.apt:
+    name:
+      - python3
+      - python3-venv
+      # For building the Vue frontend. Debian 12 ships Node 18, which is the
+      # oldest version Vite 6 accepts.
+      - nodejs
+      - npm
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+# Both directories up front: 'copy' creates no parent directories for a file
+# target, so /opt/web/frontend has to be there before the sources land in it.
+- name: Create the application directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ web_dir }}"
+    - "{{ web_dir }}/frontend"
+
+- name: Copy the application
+  ansible.builtin.copy:
+    src: "{{ web_src }}/{{ item }}"
+    dest: "{{ web_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - app.py
+    - requirements.txt
+  notify: Restart the web application
+
+# The frontend is built here, in the VM. The web part belongs on the web VM, and
+# this way the host needs nothing but Vagrant and Ansible -- no Node.js, and no
+# dependency on whichever version happens to be installed there.
+#
+# node_modules and dist are deliberately not copied: they are produced below.
+- name: Copy the frontend sources
+  ansible.builtin.copy:
+    src: "{{ web_frontend_src }}/{{ item }}"
+    dest: "{{ web_dir }}/frontend/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+    directory_mode: "0755"
+  loop:
+    - package.json
+    - package-lock.json
+    - vite.config.js
+    - index.html
+    - src/
+  # Rebuilding is left to the handlers: 'npm ci' and 'npm run build' only run
+  # when one of these files actually changed. Same rule as the SQL files in the
+  # pg role, and no restart of Flask is needed -- it reads the built files off
+  # disk on every request.
+  notify:
+    - Install the frontend dependencies
+    - Build the frontend
+
+- name: Install the dependencies into a virtualenv
+  ansible.builtin.pip:
+    requirements: "{{ web_dir }}/requirements.txt"
+    virtualenv: "{{ web_dir }}/venv"
+    virtualenv_command: python3 -m venv
+    state: present
+  notify: Restart the web application
+
+# The report query is the one the lab is about, so it is deployed as its own
+# file. The application reads it on every request: editing it in the VM and
+# reloading the page is enough, no restart needed.
+- name: Look for the report query on the host
+  ansible.builtin.stat:
+    path: "{{ web_query_src }}"
+  delegate_to: localhost
+  become: false
+  register: web_query_file
+
+- name: Report a missing query
+  ansible.builtin.debug:
+    msg: >-
+      db/query.sql is missing or empty. The web application will say so on the
+      page. Write it and run 'vagrant provision' again.
+  when: not (web_query_file.stat.exists and web_query_file.stat.size > 0)
+
+- name: Copy the report query
+  ansible.builtin.copy:
+    src: "{{ web_query_src }}"
+    dest: "{{ web_dir }}/query.sql"
+    owner: root
+    group: root
+    mode: "0644"
+  when: web_query_file.stat.exists
+
+- name: Install the service unit
+  ansible.builtin.template:
+    src: web.service.j2
+    dest: /etc/systemd/system/web.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart the web application
+
+- name: Start and enable the web application
+  ansible.builtin.systemd_service:
+    name: web
+    state: started
+    enabled: true
+    daemon_reload: true
