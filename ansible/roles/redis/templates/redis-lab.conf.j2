@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+
+# Loopback for redis-cli inside the VM, and the lab address for the web VM.
+bind 127.0.0.1 {{ redis_host }}
+
+# No password is set, so protected mode would refuse every non-loopback client.
+# Acceptable because the VM is reachable only from the host-only lab network.
+protected-mode no
+
+# A cache is a bounded store: once it is full, Redis has to drop something
+# rather than refuse writes. allkeys-lru drops what was used least recently.
+maxmemory 128mb
+maxmemory-policy allkeys-lru

@@ -1,0 +1,31 @@
+---
+- name: Install Redis
+  ansible.builtin.apt:
+    name: redis-server
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Write the lab configuration
+  ansible.builtin.template:
+    src: redis-lab.conf.j2
+    dest: /etc/redis/redis-lab.conf
+    owner: redis
+    group: redis
+    mode: "0640"
+  notify: Restart Redis
+
+# Redis applies directives in order, so the include has to be the last line of
+# the distribution file for these settings to win.
+- name: Include the lab configuration from redis.conf
+  ansible.builtin.lineinfile:
+    path: /etc/redis/redis.conf
+    line: include /etc/redis/redis-lab.conf
+    insertafter: EOF
+  notify: Restart Redis
+
+- name: Start and enable Redis
+  ansible.builtin.service:
+    name: redis-server
+    state: started
+    enabled: true
