@@ -17,5 +17,5 @@ pg_sql_files:
   - schema.sql
   - seed.sql
 
-# How long a cached report stays valid.
+# How long a cache entry stays valid, in seconds.
 cache_ttl_seconds: 300

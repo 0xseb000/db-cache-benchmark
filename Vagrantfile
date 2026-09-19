@@ -1,7 +1,7 @@
 # Three-VM lab for the cache-aside benchmark.
 #
 #   pg     PostgreSQL, holds the data
-#   redis  Redis, caches the report the web app asks for
+#   redis  Redis, caches the answers the web app asks for
 #   web    the web application the browser talks to
 #
 # The chain is pg -> redis -> web: the browser only ever sees the web VM, the
