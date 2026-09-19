@@ -16,8 +16,6 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://192.168.56.12:8000',
-      '/report': 'http://192.168.56.12:8000',
-      '/invalidate': 'http://192.168.56.12:8000',
     },
   },
 });
