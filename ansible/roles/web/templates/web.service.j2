@@ -1,6 +1,6 @@
 # {{ ansible_managed }}
 [Unit]
-Description=Cache-aside report web application
+Description=DB cache benchmark web application
 After=network-online.target
 Wants=network-online.target
 
@@ -17,7 +17,6 @@ Environment=PG_USER={{ pg_user }}
 Environment=PG_PASSWORD={{ pg_password }}
 Environment=REDIS_HOST={{ redis_host }}
 Environment=CACHE_TTL={{ cache_ttl_seconds }}
-Environment=QUERY_FILE={{ web_dir }}/query.sql
 Environment=PORT={{ web_port }}
 
 [Install]

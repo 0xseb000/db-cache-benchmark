@@ -72,32 +72,6 @@
     state: present
   notify: Restart the web application
 
-# The report query is the one the lab is about, so it is deployed as its own
-# file. The application reads it on every request: editing it in the VM and
-# reloading the page is enough, no restart needed.
-- name: Look for the report query on the host
-  ansible.builtin.stat:
-    path: "{{ web_query_src }}"
-  delegate_to: localhost
-  become: false
-  register: web_query_file
-
-- name: Report a missing query
-  ansible.builtin.debug:
-    msg: >-
-      db/query.sql is missing or empty. The web application will say so on the
-      page. Write it and run 'vagrant provision' again.
-  when: not (web_query_file.stat.exists and web_query_file.stat.size > 0)
-
-- name: Copy the report query
-  ansible.builtin.copy:
-    src: "{{ web_query_src }}"
-    dest: "{{ web_dir }}/query.sql"
-    owner: root
-    group: root
-    mode: "0644"
-  when: web_query_file.stat.exists
-
 - name: Install the service unit
   ansible.builtin.template:
     src: web.service.j2
