@@ -3,15 +3,12 @@
 Ein kleines Labor aus drei VMs, das zeigt, was ein **Cache-Aside-Muster mit
 Redis** vor einer teuren Abfrage gegen **PostgreSQL** bewirkt.
 
-```
-Browser  ──>  web  ──>  redis  ──>  pg
-              192.168.56.12  .11    .10
-```
+![db-benchmark-scheme](/docs/db-benchmark-scheme.jpg)
 
 Die Web-VM fragt zuerst Redis. Nur bei einem Cache-Miss geht sie an PostgreSQL 
 und legt das Ergebnis auf dem Rückweg in Redis ab. **Jede** Antwort der Seite
 nennt, woher sie kam und wie lange sie gebraucht hat und bei einem Treffer
-zusätzlich, wie lange PostgreSQL dafür gebraucht hatte.
+zusätzlich, wie lange PostgreSQL dafür gebraucht hätte.
 
 ## Voraussetzungen
 
@@ -23,8 +20,7 @@ zusätzlich, wie lange PostgreSQL dafür gebraucht hatte.
 | Ansible | läuft auf dem Host, nicht in den VMs |
 | Collection `community.postgresql` | `ansible-galaxy collection install community.postgresql` |
 
-Als Box dient `bento/debian-12`; deren Parallels-Image wird für arm64
-veröffentlicht.
+Als Box dient `bento/debian-12`; deren Parallels-Image wird für arm64 veröffentlicht.
 
 ## Labor starten
 
@@ -34,8 +30,7 @@ vagrant up
 
 Vagrant baut `pg`, `redis` und `web` in dieser Reihenfolge. Ansible läuft ein
 einziges Mal, sobald `web` steht, und konfiguriert alle drei VMs. Darin auch
-`npm ci` und `npm run build` für die Vue-Oberfläche. Das geschieht **in der
-`web`-VM**: auf dem Host braucht es kein Node.js.
+`npm ci` und `npm run build` für die Vue-Oberfläche.
 
 Wer die Oberfläche häufig ändert, muss dafür nicht jedes Mal provisionieren. In `web/frontend/`,
 `npm run dev` startet auf dem Host einen Vite-Server mit Hot Reload, der `/api`
@@ -48,6 +43,8 @@ http://192.168.56.12:8000
 ```
 
 ## Die Demo
+
+![db-benchmark-demo](/docs/db-benchmark-demo.png)
 
 Die Seite ist in drei Teile gegliedert: Filter, Split-Screen und Preis-Formular.
 
@@ -77,18 +74,6 @@ Seiten zeigen die Zeit, einen Balken auf gemeinsamer Skala und das Ergebnis.
 
 Darunter lassen sich alle Tabellen blättern; auch diese Seiten gehen durch den
 Cache.
-
-Idempotenz nachweisen, der zweite Lauf muss `changed=0` melden:
-
-```sh
-vagrant provision
-```
-
-Von vorn beginnen:
-
-```sh
-vagrant destroy -f && vagrant up
-```
 
 ## Aufbau
 
