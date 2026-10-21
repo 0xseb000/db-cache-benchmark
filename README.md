@@ -1,107 +1,113 @@
 # db-cache-benchmark
 
-Ein kleines Labor aus drei VMs, das zeigt, was ein **Cache-Aside-Muster mit
-Redis** vor einer teuren Abfrage gegen **PostgreSQL** bewirkt.
+A small lab of three VMs that shows what a **cache-aside pattern with Redis**
+does in front of an expensive query against **PostgreSQL**.
 
 ![db-benchmark-scheme](/docs/db-benchmark-scheme.jpg)
 
-Die Web-VM fragt zuerst Redis. Nur bei einem Cache-Miss geht sie an PostgreSQL 
-und legt das Ergebnis auf dem Rückweg in Redis ab. **Jede** Antwort der Seite
-nennt, woher sie kam und wie lange sie gebraucht hat und bei einem Treffer
-zusätzlich, wie lange PostgreSQL dafür gebraucht hätte.
+The web VM asks Redis first. Only on a cache miss does it go to PostgreSQL,
+storing the result in Redis on the way back. **Every** response of the page
+states where it came from and how long it took, and on a hit also how long
+PostgreSQL would have needed.
 
-## Voraussetzungen
+## Prerequisites
 
-| Komponente | Anmerkung |
-| ---------- | --------- |
-| macOS auf Apple Silicon | arm64 |
-| Parallels Desktop | Pro oder Business Edition |
+| Component | Note |
+| --------- | ---- |
+| macOS on Apple Silicon | arm64 |
+| Parallels Desktop | Pro or Business Edition |
 | Vagrant + `vagrant-parallels` | `vagrant plugin install vagrant-parallels` |
-| Ansible | läuft auf dem Host, nicht in den VMs |
+| Ansible | runs on the host, not inside the VMs |
 | Collection `community.postgresql` | `ansible-galaxy collection install community.postgresql` |
 
-Als Box dient `bento/debian-12`; deren Parallels-Image wird für arm64 veröffentlicht.
+The box is `bento/debian-12`; its Parallels image is published for arm64.
 
-## Labor starten
+## Starting the lab
 
 ```sh
 vagrant up
 ```
 
-Vagrant baut `pg`, `redis` und `web` in dieser Reihenfolge. Ansible läuft ein
-einziges Mal, sobald `web` steht, und konfiguriert alle drei VMs. Darin auch
-`npm ci` und `npm run build` für die Vue-Oberfläche.
+Vagrant builds `pg`, `redis` and `web` in that order. Ansible runs once, as
+soon as `web` is up, and configures all three VMs. This includes `npm ci` and
+`npm run build` for the Vue frontend.
 
-Wer die Oberfläche häufig ändert, muss dafür nicht jedes Mal provisionieren. In `web/frontend/`,
-`npm run dev` startet auf dem Host einen Vite-Server mit Hot Reload, der `/api`
-an `192.168.56.12:8000` weiterleitet.
+If the frontend is changed often, it's not neccessary to provision every time. In
+`web/frontend/`, `npm run dev` starts a Vite server with hot reload on the
+host, which forwards `/api` to `192.168.56.12:8000`.
 
-Danach im Browser:
+Then open in the browser:
 
 ```
 http://192.168.56.12:8000
 ```
 
-## Die Demo
+## The demo
 
 ![db-benchmark-demo](/docs/db-benchmark-demo.png)
 
-Die Seite ist in drei Teile gegliedert: Filter, Split-Screen und Preis-Formular.
+The page is split into three parts: filter, split screen and price form. The
+UI itself is in German; button labels are quoted as they appear.
 
-**Filter.** Hoster, Dienste und Ablaufzeitraum grenzen eine Auswertung über
-`domain` und `domain_dienst` ein (1,5 Mio. Zeilen, keine Sekundärindizes).
-Jede Kombination ist ein eigener Redis-Eintrag, und die Seite zeigt den
-Schlüssel an, z. B. `auswertung:2:HOST,MAIL:30`.
+**Filter.** Hoster, services and expiry period narrow down a report over
+`domain` and `domain_dienst` (1.5 million rows, no secondary indexes). Every
+combination is its own Redis entry, and the page shows the key, e.g.
+`auswertung:2:HOST,MAIL:30`.
 
-**Split-Screen.** **Auswerten** schickt dieselbe Anfrage gleichzeitig zweimal:
-links mit `?nocache` direkt an PostgreSQL, rechts über `cache_aside()`. Beide
-Seiten zeigen die Zeit, einen Balken auf gemeinsamer Skala und das Ergebnis.
+**Split screen.** **Auswerten** (evaluate) sends the same request twice at the
+same time: on the left with `?nocache` straight to PostgreSQL, on the right
+through `cache_aside()`. Both sides show the time, a bar on a shared scale and
+the result.
 
-1. **Cache leeren**, dann **Auswerten**. Beide Seiten sind langsam, Redis erhätl ein MISS.
-2. **Auswerten** noch einmal. Links bleibt es bei einigen Sekunden, rechts ist
-   es zwischen 0.5 - 1.5ms. Darüber steht der Faktor („×8000 schneller“).
-3. Einen Filter ändern: ein neuer Schlüssel, also wieder ein Miss.
+1. **Cache leeren** (clear cache), then **Auswerten**. Both sides are slow,
+   Redis gets a MISS.
+2. **Auswerten** once more. The left side stays at a few seconds, the right
+   side is between 0.5 and 1.5 ms. Above it, the factor is shown
+   ("×8000 schneller", i.e. ×8000 faster).
+3. Change a filter: a new key, so a miss again.
 
-**Konsistenz.** Unten lässt sich ein Preis direkt in PostgreSQL ändern.
+**Consistency.** At the bottom, a price can be changed directly in PostgreSQL.
 
-4. Ohne Haken bei *Cache beim Schreiben invalidieren* den Preis für `HOST`
-   ändern. Die Auswertung läuft neu: links steht der neue Umsatz, rechts der
-   alte aus Redis. Die abweichenden Zellen werden rot markiert, und die Seite
-   zeigt an, wie alt der Eintrag ist und wie lange er noch gilt.
-5. **Betroffene Einträge invalidieren**, oder mit Haken erneut speichern: beide
-   Seiten zeigen wieder denselben Stand.
-6. **Preise zurücksetzen** stellt die Preise vom Laden der Seite wieder her.
+4. With *Cache beim Schreiben invalidieren* (invalidate cache on write)
+   unchecked, change the price for `HOST`. The report runs again: the left
+   side shows the new revenue, the right side the old one from Redis. The
+   differing cells are marked red, and the page shows how old the entry is
+   and how long it remains valid.
+5. **Betroffene Einträge invalidieren** (invalidate affected entries), or save
+   again with the box checked: both sides show the same state again.
+6. **Preise zurücksetzen** (reset prices) restores the prices from when the
+   page was loaded.
 
-Darunter lassen sich alle Tabellen blättern; auch diese Seiten gehen durch den
-Cache.
+Below that, all tables can be paged through; these pages also go through the
+cache.
 
-## Aufbau
+## Layout
 
 ```
-Vagrantfile              drei VMs, feste Adressen im Host-only-Netz
+Vagrantfile              three VMs, fixed addresses on the host-only network
 ansible/
-  site.yml               ein Play je VM
-  group_vars/all.yml     Adressen, Zugangsdaten, TTL
-  roles/pg/              Datenbank, Rollen, db/*.sql einspielen
-  roles/redis/           Cache, 128 MB, allkeys-lru
-  roles/web/             Node.js, Vite-Build, Virtualenv, systemd-Dienst
+  site.yml               one play per VM
+  group_vars/all.yml     addresses, credentials, TTL
+  roles/pg/              database, roles, loading db/*.sql
+  roles/redis/           cache, 128 MB, allkeys-lru
+  roles/web/             Node.js, Vite build, virtualenv, systemd service
 db/                      schema.sql, seed.sql
-web/app.py               Flask: die Vue-Seite und die JSON-Schnittstelle;
-                         cache_aside() ist die einzige Stelle, die Redis liest
+web/app.py               Flask: the Vue page and the JSON API;
+                         cache_aside() is the only place that reads Redis
 web/frontend/
-  src/index.vue          die ganze Oberfläche: template, script, style
-  vite.config.js         Basispfad /static/, Dev-Server mit Proxy auf die web-VM
+  src/index.vue          the whole frontend: template, script, style
+  vite.config.js         base path /static/, dev server proxying to the web VM
 ```
 
-## Die drei VMs
+## The three VMs
 
-| VM | Adresse | Dienst | Erreichbar von |
+| VM | Address | Service | Reachable from |
 | --- | --- | --- | --- |
-| `pg` | 192.168.56.10 | PostgreSQL 15, Datenbank `hostingdb` | nur von `web` (`pg_hba.conf`) |
-| `redis` | 192.168.56.11 | Redis, 128 MB, `allkeys-lru` | nur aus dem Labornetz |
-| `web` | 192.168.56.12 | Flask auf Port 8000, Dienst `web` | vom Host |
+| `pg` | 192.168.56.10 | PostgreSQL 15, database `hostingdb` | only from `web` (`pg_hba.conf`) |
+| `redis` | 192.168.56.11 | Redis, 128 MB, `allkeys-lru` | only from the lab network |
+| `web` | 192.168.56.12 | Flask on port 8000, service `web` | from the host |
 
-Anmelden und nachsehen:
+Log in and take a look:
 
 ```sh
 vagrant ssh pg     -c 'sudo -u postgres psql hostingdb'
@@ -109,21 +115,23 @@ vagrant ssh redis  -c 'redis-cli info memory'
 vagrant ssh web    -c 'sudo journalctl -u web -f'
 ```
 
-## Bewusste Entscheidungen
+## Deliberate decisions
 
-- **Cache-Aside steht genau einmal im Code.** `cache_aside()` in `web/app.py` ist
-  die einzige Funktion, die Redis liest oder schreibt; `invalidieren()` die
-  einzige, die löscht. Jeder Endpunkt der Seite geht durch sie hindurch.
-- **Zugangsdaten im Klartext** in `ansible/group_vars/all.yml`. Die VMs hängen nur
-  am Host-only-Netz. Alles, was ein echtes Netz sieht, müsste in Ansible Vault.
-- **`protected-mode no`** in Redis, weil kein Passwort gesetzt ist. Aus demselben
-  Grund vertretbar.
-- **Flask-Entwicklungsserver** statt Gunicorn. Das Labor misst PostgreSQL und
-  Redis, nicht den WSGI-Server.
-- **`schema.sql` und `seed.sql` werden nur eingespielt, nicht erzeugt.**
-- **Vue als Single-File-Component, gebaut mit Vite.** Der übliche Weg eines
-  Vue-Projekts: `web/frontend/src/index.vue` enthält Vorlage, Logik und
-  Gestaltung in einer Datei.
-- **Der Build läuft in der `web`-VM, nicht auf dem Host.** Der Webteil gehört auf
-  die Web-VM, und so braucht der Host nur Vagrant und Ansible (nicht zusätzlich
-  die richtige Node-Version). 
+- **Cache-aside appears exactly once in the code.** `cache_aside()` in
+  `web/app.py` is the only function that reads or writes Redis;
+  `invalidieren()` is the only one that deletes. Every endpoint of the page
+  goes through it.
+- **Plain-text credentials** in `ansible/group_vars/all.yml`. The VMs are only
+  attached to the host-only network. Anything a real network sees would have
+  to go into Ansible Vault.
+- **`protected-mode no`** in Redis, because no password is set. Acceptable for
+  the same reason.
+- **Flask development server** instead of Gunicorn. The lab measures
+  PostgreSQL and Redis, not the WSGI server.
+- **`schema.sql` and `seed.sql` are only loaded, not generated.**
+- **Vue as a single-file component, built with Vite.** The usual way for a Vue
+  project: `web/frontend/src/index.vue` holds template, logic and styling in
+  one file.
+- **The build runs in the `web` VM, not on the host.** The web part belongs on
+  the web VM, and this way the host only needs Vagrant and Ansible (not also
+  the right Node version).
